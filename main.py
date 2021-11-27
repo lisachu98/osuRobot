@@ -1,3 +1,4 @@
+import os
 import sys
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QFileDialog)
 from PyQt5.Qt import Qt
@@ -15,7 +16,8 @@ board = pyfirmata.Arduino('/dev/ttyACM0')
 it = pyfirmata.util.Iterator(board)
 it.start()
 board.digital[6].mode = pyfirmata.INPUT
-
+board.digital[7].mode = pyfirmata.INPUT
+board.digital[8].mode = pyfirmata.INPUT
 
 class Window(QMainWindow, Ui_MainWindow):
     def __init__(self, parent=None):
@@ -26,36 +28,58 @@ class Window(QMainWindow, Ui_MainWindow):
         self.lines = []
         self.x = 0
         self.y = 0
+        self.prawo = 0
+        self.dol = 0
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_S:
             self.start()
+        if event.key() == Qt.Key_A:
+            self.wczytaj()
         if event.key() == Qt.Key_K:
             self.pozycjaPocz()
+        if event.key() == Qt.Key_F:
+            kit.stepper2.onestep()
+            self.dol += 1
+            print(self.dol)
+        if event.key() == Qt.Key_G:
+            kit.stepper1.onestep()
+            self.prawo += 1
+            print(self.prawo)
 
     def goTo(self, x, y):
-        xTmp = self.x
-        if x > xTmp:
-            for i in range(int((x - xTmp) * ratio)):
-                kit.stepper1.onestep(direction=stepper.BACKWARD)
-            self.x += int((x - xTmp) * ratio)
-        if x < xTmp:
-            for i in range(int((xTmp - x) * ratio)):
-                kit.stepper1.onestep()
-            self.x -= int((xTmp - x) * ratio)
+        while True:
+            if self.x == x and self.y == y:
+                break
+            if self.x != x:
+                if x > self.x:
+                    kit.stepper1.onestep()
+                    self.x += 1
+                else:
+                    kit.stepper1.onestep(direction=stepper.BACKWARD)
+                    self.x -= 1
+            if self.y != y:
+                if y > self.y:
+                    kit.stepper2.onestep()
+                    self.y += 1
+                else:
+                    kit.stepper2.onestep(direction=stepper.BACKWARD)
+                    self.y -= 1
+
+    def reset(self):
+        board.digital[10].write(0)
+        board.digital[11].write(0)
+        self.pushButton_2.setEnabled(0)
+        self.progressBar.setTextVisible(0)
+        self.progressBar.setValue(0)
 
     def wczytaj(self):
-        path, _ = QFileDialog.getOpenFileName(None, "Wybierz mape", "/home/lisachu/Desktop/Songs",
-                                              "osu! beatmap (*.osu)")
-        if path == '':
-            return
-        with open(path) as f:
+        with open("/media/pi/NEW VOLUME/osuRobot/Song/" + os.listdir("/media/pi/NEW VOLUME/osuRobot/Song")[0]) as f:
             lines = f.readlines()
         self.label_5.setText(lines[22][13:])
         self.label_6.setText(lines[24][14:])
         self.label_7.setText(lines[25][8:])
         self.label_8.setText(lines[26][8:])
-
         indeks = 0
         for line in lines:
             indeks += 1
@@ -68,8 +92,8 @@ class Window(QMainWindow, Ui_MainWindow):
             lines[i] = lines[i][:3]
         for i in range(len(lines)):
             lines[i][2] = int(lines[i][2])
-            lines[i][1] = int(lines[i][1])
-            lines[i][0] = int(lines[i][0])
+            lines[i][1] = int(int(lines[i][1]) * ratio)
+            lines[i][0] = int(int(lines[i][0]) * ratio)
         czasStart = lines[0][2]
         for i in range(len(lines)):
             lines[i][2] = (lines[i][2] - czasStart) / 1000
@@ -78,34 +102,59 @@ class Window(QMainWindow, Ui_MainWindow):
         self.pushButton_2.setEnabled(1)
         self.pozycjaPocz()
         print("Rysik na (" + str(lines[0][0]) + ";" + str(lines[0][1]) + ")")
-        self.goTo(lines[0][0], 0)
+        self.goTo(lines[0][0], lines[0][1])
+        board.digital[10].write(1)
 
     def pozycjaPocz(self):
         while True:
-            kit.stepper1.onestep()
             sw = board.digital[6].read()
             if sw is True:
                 self.x = 0
                 break
+            kit.stepper1.onestep(direction=stepper.BACKWARD)
+        while True:
+            sw = board.digital[7].read()
+            if sw is True:
+                self.y = 0
+                break
+            kit.stepper2.onestep(direction=stepper.BACKWARD)
+        self.goTo(130, 73)
+        self.x = 0
+        self.y = 0
+        # time.sleep(1)
+        # self.goTo(256, 0)
+        # time.sleep(1)
+        # self.goTo(256, 192)
+        # time.sleep(1)
+        # self.goTo(0, 192)
+        # time.sleep(1)
+        # self.goTo(0, 0)
 
     def start(self):
+        startTime = time.time()
         tmpLines = self.lines[1:]
         koniec = tmpLines[len(tmpLines) - 1][2] - tmpLines[0][2]
         czas = 0.0
         self.progressBar.setTextVisible(1)
+        board.digital[11].write(1)
         print("Rysik na (" + str(tmpLines[0][0]) + ";" + str(tmpLines[0][1]) + ")")
-        self.goTo(tmpLines[0][0], 0)
+        self.goTo(tmpLines[0][0], tmpLines[0][1])
         while czas < koniec:
-            time.sleep(0.01)
-            czas += 0.01
-            if czas > tmpLines[0][2]:
+            sw = board.digital[8].read()
+            if sw is True:
+                break
+            time.sleep(0.001)
+            stepTime = time.time()
+            print(str(stepTime - startTime) + ":::" + str(tmpLines[0][2]))
+            if stepTime - startTime > tmpLines[0][2]:
                 tmpLines = tmpLines[1:]
                 print("Rysik na (" + str(tmpLines[0][0]) + ";" + str(tmpLines[0][1]) + ")")
-                self.goTo(tmpLines[0][0], 0)
+                self.goTo(tmpLines[0][0], tmpLines[0][1])
             self.progressBar.setValue(int(czas * 100 / koniec))
-
+        self.reset()
 
 if __name__ == "__main__":
+    board.digital[9].write(1)
     app = QApplication(sys.argv)
     win = Window()
     win.show()
