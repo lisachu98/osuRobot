@@ -39,13 +39,17 @@ class Window(QMainWindow, Ui_MainWindow):
         if event.key() == Qt.Key_K:
             self.pozycjaPocz()
         if event.key() == Qt.Key_F:
-            kit.stepper2.onestep()
+            kit.stepper2.onestep(style=stepper.DOUBLE)
             self.dol += 1
-            print(self.dol)
+            print("y: " + str(self.dol))
         if event.key() == Qt.Key_G:
-            kit.stepper1.onestep()
+            kit.stepper1.onestep(style=stepper.DOUBLE)
             self.prawo += 1
-            print(self.prawo)
+            print("x: " + str(self.prawo))
+        if event.key() == Qt.Key_R:
+            kit.stepper2.onestep(style=stepper.DOUBLE, direction=stepper.BACKWARD)
+        if event.key() == Qt.Key_D:
+            kit.stepper1.onestep(style=stepper.DOUBLE, direction=stepper.BACKWARD)
 
     def goTo(self, x, y):
         while True:
@@ -53,17 +57,17 @@ class Window(QMainWindow, Ui_MainWindow):
                 break
             if self.x != x:
                 if x > self.x:
-                    kit.stepper1.onestep()
+                    kit.stepper1.onestep(style=stepper.DOUBLE)
                     self.x += 1
                 else:
-                    kit.stepper1.onestep(direction=stepper.BACKWARD)
+                    kit.stepper1.onestep(style=stepper.DOUBLE, direction=stepper.BACKWARD)
                     self.x -= 1
             if self.y != y:
                 if y > self.y:
-                    kit.stepper2.onestep()
+                    kit.stepper2.onestep(style=stepper.DOUBLE)
                     self.y += 1
                 else:
-                    kit.stepper2.onestep(direction=stepper.BACKWARD)
+                    kit.stepper2.onestep(style=stepper.DOUBLE, direction=stepper.BACKWARD)
                     self.y -= 1
 
     def reset(self):
@@ -80,6 +84,7 @@ class Window(QMainWindow, Ui_MainWindow):
         self.label_6.setText(lines[24][14:])
         self.label_7.setText(lines[25][8:])
         self.label_8.setText(lines[26][8:])
+
         indeks = 0
         for line in lines:
             indeks += 1
@@ -111,46 +116,36 @@ class Window(QMainWindow, Ui_MainWindow):
             if sw is True:
                 self.x = 0
                 break
-            kit.stepper1.onestep(direction=stepper.BACKWARD)
+            kit.stepper1.onestep(style=stepper.DOUBLE, direction=stepper.BACKWARD)
         while True:
             sw = board.digital[7].read()
             if sw is True:
                 self.y = 0
                 break
-            kit.stepper2.onestep(direction=stepper.BACKWARD)
-        self.goTo(130, 73)
+            kit.stepper2.onestep(style=stepper.DOUBLE, direction=stepper.BACKWARD)
+        self.goTo(98, 51)
         self.x = 0
         self.y = 0
-        # time.sleep(1)
-        # self.goTo(256, 0)
-        # time.sleep(1)
-        # self.goTo(256, 192)
-        # time.sleep(1)
-        # self.goTo(0, 192)
-        # time.sleep(1)
-        # self.goTo(0, 0)
 
     def start(self):
         startTime = time.time()
         tmpLines = self.lines[1:]
         koniec = tmpLines[len(tmpLines) - 1][2] - tmpLines[0][2]
-        czas = 0.0
         self.progressBar.setTextVisible(1)
         board.digital[11].write(1)
         print("Rysik na (" + str(tmpLines[0][0]) + ";" + str(tmpLines[0][1]) + ")")
         self.goTo(tmpLines[0][0], tmpLines[0][1])
-        while czas < koniec:
+        while len(tmpLines) > 1:
             sw = board.digital[8].read()
             if sw is True:
                 break
             time.sleep(0.001)
             stepTime = time.time()
-            print(str(stepTime - startTime) + ":::" + str(tmpLines[0][2]))
             if stepTime - startTime > tmpLines[0][2]:
                 tmpLines = tmpLines[1:]
                 print("Rysik na (" + str(tmpLines[0][0]) + ";" + str(tmpLines[0][1]) + ")")
                 self.goTo(tmpLines[0][0], tmpLines[0][1])
-            self.progressBar.setValue(int(czas * 100 / koniec))
+            self.progressBar.setValue(int((stepTime - startTime) * 100 / koniec))
         self.reset()
 
 if __name__ == "__main__":
