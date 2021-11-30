@@ -1,7 +1,10 @@
 import os
 import sys
+import cv2
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QFileDialog)
 from PyQt5.Qt import Qt
+from picamera.array import PiRGBArray # Generates a 3D RGB array
+from picamera import PiCamera
 import time
 import board
 from adafruit_motorkit import MotorKit
@@ -11,6 +14,10 @@ from gui import Ui_MainWindow
 
 ratio = 0.5
 
+camera = PiCamera()
+camera.resolution = (640, 480)
+camera.framerate = 32
+raw_capture = PiRGBArray(camera, size=(640, 480))
 kit = MotorKit(i2c=board.I2C())
 board = pyfirmata.Arduino('/dev/ttyACM0')
 it = pyfirmata.util.Iterator(board)
@@ -50,6 +57,18 @@ class Window(QMainWindow, Ui_MainWindow):
             kit.stepper2.onestep(style=stepper.DOUBLE, direction=stepper.BACKWARD)
         if event.key() == Qt.Key_D:
             kit.stepper1.onestep(style=stepper.DOUBLE, direction=stepper.BACKWARD)
+
+    def check(image):
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+        mask1 = cv2.inRange(image, (0, 50, 20), (5, 255, 255))
+        mask2 = cv2.inRange(image, (175, 50, 20), (180, 255, 255))
+        mask = cv2.bitwise_or(mask1, mask2)
+        contours, _ = cv2.findContours(mask.copy(), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        for cnt in contours:
+            approx = cv2.approxPolyDP(cnt, 0.01 * cv2.arcLength(cnt, True), True)
+            if cv2.contourArea(cnt) > 100 and len(approx) > 7:
+                return True
+        return False
 
     def goTo(self, x, y):
         while True:
@@ -109,6 +128,13 @@ class Window(QMainWindow, Ui_MainWindow):
         print("Rysik na (" + str(lines[0][0]) + ";" + str(lines[0][1]) + ")")
         self.goTo(lines[0][0], lines[0][1])
         board.digital[10].write(1)
+        for frame in camera.capture_continuous(raw_capture, format="bgr", use_video_port=True):
+            image = frame.array
+            if self.check(image):
+                break
+            raw_capture.truncate(0)
+        time.sleep(1)
+        self.start()
 
     def pozycjaPocz(self):
         while True:
