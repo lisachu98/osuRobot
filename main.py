@@ -3,7 +3,7 @@ import sys
 import cv2
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QFileDialog)
 from PyQt5.Qt import Qt
-from picamera.array import PiRGBArray # Generates a 3D RGB array
+from picamera.array import PiRGBArray
 from picamera import PiCamera
 import time
 import board
